@@ -1,0 +1,61 @@
+{
+  "entities": {
+    "Order": {
+      "title": "Order",
+      "description": "A purchase record of an OTT subscription plan",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier of the order"
+        },
+        "userId": {
+          "type": "string",
+          "description": "User UID who purchased the subscription"
+        },
+        "email": {
+          "type": "string",
+          "description": "Email ID of the user"
+        },
+        "serviceId": {
+          "type": "string",
+          "description": "ID of the selected OTT subscription service"
+        },
+        "serviceName": {
+          "type": "string",
+          "description": "Name of the subscription service"
+        },
+        "price": {
+          "type": "number",
+          "description": "Price paid for the subscription in INR"
+        },
+        "duration": {
+          "type": "string",
+          "description": "Duration of the subscription plan"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "active", "expired"],
+          "description": "Verification status of the purchase"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the order was placed"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the order was last updated"
+        }
+      },
+      "required": ["id", "userId", "email", "serviceId", "serviceName", "price", "duration", "status", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "orders/{orderId}": {
+      "schema": "Order",
+      "description": "Collection of subscription purchase logs"
+    }
+  }
+}
