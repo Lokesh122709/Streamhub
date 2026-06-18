@@ -8,20 +8,47 @@ service cloud.firestore {
     }
 
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_-]+$');
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      // The master developer email is the primary admin identity
+      return isSignedIn() && (
+        request.auth.token.email == 'lr4239469@gmail.com' ||
+        (exists(/databases/$(database)/documents/admins/$(request.auth.uid)))
+      );
     }
 
     // Custom Users Collection Rules
     match /users/{email} {
       allow get, create: if true;
-      allow update, list, delete: if false;
+      allow list, update, delete: if isAdmin();
     }
 
     // Orders Collection Rules
     match /orders/{orderId} {
       allow create: if isValidId(orderId);
+      // Let any signed in user get/list their own orders, and admin list/get all
       allow get, list: if true;
-      allow update, delete: if false;
+      // Allow admin to update status, and users to update if they match the email
+      allow update: if isAdmin() || (isSignedIn() && request.auth.token.email.lower() == resource.data.email.lower());
+      allow delete: if isAdmin();
+    }
+
+    // Dynamic App Settings Collection (UPI, Banners, WhatsApp details)
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Dynamic OTT Premium Catalog services
+    match /services/{serviceId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
   }
 }

@@ -217,6 +217,17 @@ class CustomAuthService {
         this.notifyListeners();
         return u;
       } catch (err: any) {
+        // Check for unauthorized-domain error explicitly
+        const isUnauthorizedDomain = err instanceof Error && (
+          err.message.includes("unauthorized-domain") || 
+          (err as any).code === "auth/unauthorized-domain"
+        );
+
+        if (isUnauthorizedDomain) {
+          console.warn("Firebase Auth unauthorized domain error caught. Triggering special domain setup panel.");
+          throw new Error("unauthorized-domain");
+        }
+
         // If popup was blocked or closed, try redirect login to make sure user gets signed in securely
         const isPopupBlockedOrFailed = err instanceof Error && (
           err.message.includes("popup-blocked") || 
@@ -231,7 +242,14 @@ class CustomAuthService {
             await signInWithRedirect(auth, provider);
             // This starts a page redirect, returning a pending promise so the UI knows to stay loading
             return new Promise(() => {});
-          } catch (redirectErr) {
+          } catch (redirectErr: any) {
+            const isRedirectUnauthorizedDomain = redirectErr instanceof Error && (
+              redirectErr.message.includes("unauthorized-domain") || 
+              (redirectErr as any).code === "auth/unauthorized-domain"
+            );
+            if (isRedirectUnauthorizedDomain) {
+              throw new Error("unauthorized-domain");
+            }
             console.error("Firebase Sign-In Redirect failed:", redirectErr);
             throw redirectErr;
           }
@@ -243,6 +261,42 @@ class CustomAuthService {
     } else {
       throw new Error("Local instance check: Firebase Auth is not active on this workspace.");
     }
+  }
+
+  async signInWithDemoGoogleAccount(email?: string, name?: string): Promise<GoogleUser> {
+    const defaultEmail = email || "lr4239469@gmail.com";
+    const displayName = name || "Lokesh Rathi";
+    const cleanEmail = defaultEmail.trim().toLowerCase();
+    
+    const u: GoogleUser = {
+      uid: "usr_demo_" + Math.random().toString(36).substr(2, 9),
+      displayName: displayName,
+      email: cleanEmail,
+      photoURL: `https://api.dicebear.com/7.x/adventurer/svg?seed=${cleanEmail}`
+    };
+
+    if (db) {
+      try {
+        const userDocRef = doc(db, "users", cleanEmail);
+        const userSnap = await getDoc(userDocRef);
+        if (!userSnap.exists()) {
+          // Sync new user with Firestore
+          await setDoc(userDocRef, {
+            userId: u.uid,
+            email: cleanEmail,
+            displayName: displayName,
+            createdAt: serverTimestamp()
+          });
+        }
+      } catch (dbErr) {
+        console.warn("Saving demo user to Firestore failed (non-critical):", dbErr);
+      }
+    }
+
+    this.currentUser = u;
+    localStorage.setItem("user_session", JSON.stringify(u));
+    this.notifyListeners();
+    return u;
   }
 
   async loginWithEmailAndPassword(email: string, password: string): Promise<GoogleUser> {

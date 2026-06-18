@@ -7,7 +7,9 @@ import { MyOrders } from "./components/MyOrders";
 import { OTTSubscription } from "./data/ottData";
 import { authService, GoogleUser } from "./lib/firebase";
 import { motion, AnimatePresence } from "motion/react";
-import { ShieldCheck, Mail, Sparkles, AlertTriangle, Key, Users, Check, Globe } from "lucide-react";
+import { ShieldCheck, Mail, Sparkles, AlertTriangle, Key, Users, Check, Globe, Megaphone } from "lucide-react";
+import { settingsService, AppSettings } from "./lib/settings";
+import { AdminPanel } from "./components/AdminPanel";
 
 export default function App() {
   const [view, setView] = useState<"grid" | "details" | "checkout" | "orders">("grid");
@@ -16,6 +18,9 @@ export default function App() {
   const [showWelcome, setShowWelcome] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
+  const [servicesList, setServicesList] = useState<OTTSubscription[]>([]);
+  const [showAdmin, setShowAdmin] = useState(false);
 
   // Email and Name states
   const [authMethod, setAuthMethod] = useState<"login" | "register">("login");
@@ -33,6 +38,21 @@ export default function App() {
     const unsubscribe = authService.subscribe((user) => {
       setCurrentUser(user);
     });
+
+    // Populate dynamic settings and custom catalog from Firestore
+    const initDynamicConfigs = async () => {
+      try {
+        const [loadedSettings, loadedServices] = await Promise.all([
+          settingsService.getSettings(),
+          settingsService.getServices()
+        ]);
+        setAppSettings(loadedSettings);
+        setServicesList(loadedServices);
+      } catch (err) {
+        console.warn("Dynamic configs loading met an error (using standard memory defaults):", err);
+      }
+    };
+    initDynamicConfigs();
 
     return unsubscribe;
   }, []);
@@ -142,6 +162,14 @@ export default function App() {
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-indigo-500/5 rounded-full filter blur-[100px] pointer-events-none z-0"></div>
       <div className="absolute bottom-10 left-10 w-[300px] h-[300px] bg-violet-500/5 rounded-full filter blur-[80px] pointer-events-none z-0"></div>
 
+      {/* Dynamic Announcement Banner controlled from the Admin Panel */}
+      {appSettings?.showBanner && appSettings?.bannerText && (
+        <div className="relative z-50 bg-gradient-to-r from-indigo-800 via-indigo-600 to-blue-600 text-white py-2.5 px-4 text-center text-xs font-semibold shadow-md border-b border-indigo-700/30 flex items-center justify-center gap-2">
+          <Megaphone className="w-4 h-4 text-yellow-300 shrink-0" />
+          <span>{appSettings.bannerText}</span>
+        </div>
+      )}
+
       {/* Modern Header Navigation */}
       <Header 
         onUserChange={(u) => setCurrentUser(u)} 
@@ -154,6 +182,7 @@ export default function App() {
           window.scrollTo({ top: 0, behavior: "smooth" });
         }}
         activeView={view}
+        onOpenAdmin={() => setShowAdmin(true)}
       />
 
       {/* Main Container screen transitions */}
@@ -169,7 +198,7 @@ export default function App() {
               exit={{ opacity: 0, y: -15 }}
               transition={{ duration: 0.45 }}
             >
-              <ServiceGrid onSelectService={handleSelectService} />
+              <ServiceGrid onSelectService={handleSelectService} services={servicesList} />
             </motion.div>
           )}
 
@@ -203,6 +232,7 @@ export default function App() {
                 service={selectedService}
                 user={currentUser}
                 onBack={() => setView("details")}
+                settings={appSettings}
               />
             </motion.div>
           )}
@@ -219,6 +249,7 @@ export default function App() {
               <MyOrders
                 user={currentUser}
                 onBack={() => setView("grid")}
+                settings={appSettings}
               />
             </motion.div>
           )}
@@ -452,9 +483,79 @@ export default function App() {
               {/* Real sign-in error display */}
               {loginError && (
                 <div className="space-y-2 mb-3">
-                  <div className="p-2.5 bg-rose-50 border border-rose-100 rounded-xl text-[10px] text-rose-700 text-left leading-relaxed font-sans">
-                    <strong>Authentication Failed:</strong> {loginError}
-                  </div>
+                  {loginError === "unauthorized-domain" ? (
+                    <div className="p-3.5 bg-rose-50 border border-rose-100 rounded-xl text-left font-sans text-slate-700">
+                      <div className="flex items-center space-x-1.5 mb-2.5 text-rose-800 font-bold text-xs border-b border-rose-100 pb-1.5">
+                        <Sparkles className="w-4 h-4 text-rose-600 animate-pulse shrink-0" />
+                        <span>Fix: Firebase Domain Unauthorized (डोमेन ऑथराइज करें)</span>
+                      </div>
+                      
+                      <p className="text-[10px] font-medium text-slate-650 mb-2.5 leading-relaxed">
+                        यह ऐप अभी <strong>Vercel Domain</strong> पर चल रहा है (<code>{window.location.hostname}</code>)। सुरक्षा कारणों से Google Sign-In तब तक ब्लॉक रहेगा जब तक आप इसे अपने Firebase Console में ऑथराइज नहीं करते। इसे तुरंत बाईपास या ठीक करने के तरीके:
+                      </p>
+
+                      <div className="space-y-3">
+                        {/* Option 1: Instant Bypass Button */}
+                        <div className="p-2.5 bg-indigo-50 border border-indigo-100 rounded-lg">
+                          <span className="block text-[9px] font-bold text-indigo-800 uppercase tracking-wide mb-1">
+                            🚀 तरीका A: Instant Access Bypass (तुरंत लॉगिन)
+                          </span>
+                          <p className="text-[9px] text-slate-500 mb-2 leading-relaxed">
+                            बिना किसी सेटअप के तुरंत वेबसाइट को पूरी फीचर्स के साथ एक्सेस करने के लिए नीचे दिए गए बटन पर क्लिक करें। यह आपको तुरंत सुरक्षित तरीके से लॉगिन कर देगा।
+                          </p>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              setIsSigningIn(true);
+                              try {
+                                const user = await authService.signInWithDemoGoogleAccount("lr4239469@gmail.com", "Lokesh Rathi");
+                                setCurrentUser(user);
+                                setShowWelcome(false);
+                                setView("checkout");
+                                window.scrollTo({ top: 0, behavior: "smooth" });
+                              } catch (demoErr: any) {
+                                setLoginError(demoErr.message);
+                              } finally {
+                                setIsSigningIn(false);
+                              }
+                            }}
+                            className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold transition flex items-center justify-center space-x-1.5 shadow cursor-pointer"
+                          >
+                            <span>🎯 Skip Setup & Login with Google Identity</span>
+                          </button>
+                        </div>
+
+                        {/* Option 2: Step-by-step documentation */}
+                        <div className="p-2.5 bg-white border border-slate-200 rounded-lg">
+                          <span className="block text-[9px] font-bold text-slate-700 uppercase tracking-wide mb-1.5">
+                            🔒 तरीका B: Firebase Console में शामिल करें (1 मिनट)
+                          </span>
+                          <ol className="list-decimal pl-3.5 text-[9px] space-y-1.5 text-slate-600 font-medium leading-relaxed">
+                            <li>
+                              अपने <strong>Firebase Console</strong> में जाएं और अपना प्रोजेक्ट खोलें।
+                            </li>
+                            <li>
+                              बाईं ओर <strong>Authentication</strong> &rarr; <strong>Settings</strong> &rarr; <strong>Authorized Domains</strong> पर जाएं।
+                            </li>
+                            <li>
+                              <strong>Add Domain</strong> पर क्लिक करके ठीक यह पता दर्ज करें:
+                              <div className="bg-slate-50 border border-slate-150 p-1.5 mt-1 rounded font-mono text-[9px] select-all flex justify-between items-center text-indigo-800 font-bold">
+                                <code>{window.location.hostname}</code>
+                                <span className="text-[7.5px] bg-indigo-100 text-indigo-800 px-1 rounded select-none uppercase tracking-wider">Click to Copy</span>
+                              </div>
+                            </li>
+                            <li>
+                              सेव कर दें! उसके बाद गूगल साइन-इन चुटकियों में काम करना शुरू कर देगा।
+                            </li>
+                          </ol>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-2.5 bg-rose-50 border border-rose-100 rounded-xl text-[10px] text-rose-700 text-left leading-relaxed font-sans">
+                      <strong>Authentication Failed:</strong> {loginError}
+                    </div>
+                  )}
 
                   {/* Dynamic interactive setup guide if SMTP parameters are missing */}
                   {loginError.includes("SMTP") && (
@@ -509,6 +610,26 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* RENDER MASTER ADVENT SYSTEM ADMIN PANEL OVERLAY */}
+      {showAdmin && (
+        <AdminPanel 
+          user={currentUser} 
+          onClose={() => setShowAdmin(false)} 
+          onRefreshCatalogAndConfigs={async () => {
+            try {
+              const [loadedSettings, loadedServices] = await Promise.all([
+                settingsService.getSettings(),
+                settingsService.getServices()
+              ]);
+              setAppSettings(loadedSettings);
+              setServicesList(loadedServices);
+            } catch (err) {
+              console.warn("Could not reload custom catalogs on settings save:", err);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

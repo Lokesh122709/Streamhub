@@ -15,12 +15,15 @@ import {
   ExternalLink 
 } from "lucide-react";
 
+import { AppSettings } from "../lib/settings";
+
 interface MyOrdersProps {
   user: GoogleUser | null;
   onBack: () => void;
+  settings?: AppSettings | null;
 }
 
-export const MyOrders: React.FC<MyOrdersProps> = ({ user, onBack }) => {
+export const MyOrders: React.FC<MyOrdersProps> = ({ user, onBack, settings }) => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -52,7 +55,7 @@ export const MyOrders: React.FC<MyOrdersProps> = ({ user, onBack }) => {
   };
 
   const getWhatsAppSupportLink = (order: Order) => {
-    const whatsappNumber = "919024885265";
+    const whatsappNumber = settings?.whatsappNumber || "919024885265";
     const customMessage = `Hello Stream Hub Support!\n\nI need some help or validation regarding my order:\n⭐ Order ID: ${order.id}\n⭐ Service: ${order.serviceName}\n⭐ Amount: ₹${order.price}\n⭐ Account Email: ${order.email}\n⭐ Status: ${order.status.toUpperCase()}\n\nPlease guide me on the delivery or state of my order. Thank you!`;
     return `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(customMessage)}`;
   };

@@ -50,12 +50,126 @@
         }
       },
       "required": ["id", "userId", "email", "serviceId", "serviceName", "price", "duration", "status", "createdAt", "updatedAt"]
+    },
+    "User": {
+      "title": "User",
+      "description": "Profile record for registered users",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Unique identifier assigned by Auth provider"
+        },
+        "email": {
+          "type": "string",
+          "description": "Primary email identity of the user"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Human legible name of the user"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["user", "admin"],
+          "description": "Authorization privilege status"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the profile was registered"
+        }
+      },
+      "required": ["userId", "email", "displayName"]
+    },
+    "Setting": {
+      "title": "Setting",
+      "description": "Global application configuration details",
+      "type": "object",
+      "properties": {
+        "whatsappNumber": {
+          "type": "string",
+          "description": "Active WhatsApp number for support and payment verification screenshots"
+        },
+        "qrCodeUrl": {
+          "type": "string",
+          "description": "Direct image URL of the UPI payment QR code"
+        },
+        "upiId": {
+          "type": "string",
+          "description": "Official UPI ID address of the platform"
+        },
+        "bannerText": {
+          "type": "string",
+          "description": "Urgent attention scroll banner announcement message"
+        },
+        "showBanner": {
+          "type": "boolean",
+          "description": "Whether to display the global banner text on the home landing screen"
+        }
+      },
+      "required": ["whatsappNumber", "qrCodeUrl", "upiId", "bannerText", "showBanner"]
+    },
+    "Service": {
+      "title": "Service",
+      "description": "An OTT premium subscription product",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique product identification tag"
+        },
+        "name": {
+          "type": "string",
+          "description": "Official brand identity title"
+        },
+        "price": {
+          "type": "number",
+          "description": "Cost rate of the active plan package"
+        },
+        "duration": {
+          "type": "string",
+          "description": "Assigned validity timeframe"
+        },
+        "logoKey": {
+          "type": "string",
+          "description": "Lookup key mapping to vectorized branding icons"
+        },
+        "benefits": {
+          "type": "array",
+          "description": "List of core features or premium perks on offer"
+        },
+        "description": {
+          "type": "string",
+          "description": "Paragraph detailing subscription particulars"
+        },
+        "category": {
+          "type": "string",
+          "description": "Filter classification group"
+        },
+        "tagline": {
+          "type": "string",
+          "description": "Brief catchphrase highlighted under item labels"
+        }
+      },
+      "required": ["id", "name", "price", "duration", "logoKey", "benefits", "description", "category", "tagline"]
     }
   },
   "firestore": {
     "orders/{orderId}": {
       "schema": "Order",
       "description": "Collection of subscription purchase logs"
+    },
+    "users/{email}": {
+      "schema": "User",
+      "description": "Master registered audience identity details mapped by clean emails"
+    },
+    "settings/{settingId}": {
+      "schema": "Setting",
+      "description": "Global customized configurations for active pay gates, banners, and support lines"
+    },
+    "services/{serviceId}": {
+      "schema": "Service",
+      "description": "Dynamic OTT premium offerings configurable from the Admin Portal"
     }
   }
 }

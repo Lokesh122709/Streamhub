@@ -3,25 +3,37 @@ import { OTTSubscription } from "../data/ottData";
 import { authService, GoogleUser } from "../lib/firebase";
 import { ArrowLeft, Clock, ShieldCheck, AlertCircle, CheckCircle2, Mail, X } from "lucide-react";
 import { ordersService } from "../lib/orders";
+import { AppSettings } from "../lib/settings";
 
 interface CheckoutScreenProps {
   service: OTTSubscription;
   user: GoogleUser | null;
   onBack: () => void;
+  settings?: AppSettings | null;
 }
 
-export const CheckoutScreen: React.FC<CheckoutScreenProps> = ({ service, user, onBack }) => {
+export const CheckoutScreen: React.FC<CheckoutScreenProps> = ({ service, user, onBack, settings }) => {
   const [timeLeft, setTimeLeft] = useState(300); // 5 minutes (300 seconds)
   const [elapsed, setElapsed] = useState(0); // seconds passed
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
   const [successMode, setSuccessMode] = useState(false);
   const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "sent" | "failed">("idle");
   const [sentEmailAddress, setSentEmailAddress] = useState<string>("");
+  const [upiCopied, setUpiCopied] = useState(false);
 
-  // Constants
+  // Dynamic parameters fallbacks
   const minRequiredTime = 30; // 30 seconds payment hold
-  const qrCodeUrl = "https://cdn.imageurlgenerator.com/uploads/b078839e-9a1c-45ee-9438-b4e5da61c61a.jpg";
-  const whatsappNumber = "919024885265";
+  const qrCodeUrl = settings?.qrCodeUrl || "https://cdn.imageurlgenerator.com/uploads/b078839e-9a1c-45ee-9438-b4e5da61c61a.jpg";
+  const whatsappNumber = settings?.whatsappNumber || "919024885265";
+  const upiIdVal = settings?.upiId || "lr4239469@okaxis";
+
+  const handleUpiCopy = () => {
+    navigator.clipboard.writeText(upiIdVal);
+    setUpiCopied(true);
+    setTimeout(() => {
+      setUpiCopied(false);
+    }, 2000);
+  };
 
   useEffect(() => {
     // 5-minute Countdown Timer
@@ -176,13 +188,27 @@ export const CheckoutScreen: React.FC<CheckoutScreenProps> = ({ service, user, o
         </div>
 
         {/* Price of Selected subscription directly below the image */}
-        <div className="bg-slate-50 border border-slate-150 rounded-xl p-3 max-w-xs mx-auto mb-6">
+        <div className="bg-slate-50 border border-slate-150 rounded-xl p-3 max-w-xs mx-auto mb-3">
           <p className="text-[9px] font-mono text-slate-400 uppercase tracking-widest mb-0.5 font-bold">
             SELECTED SUBSCRIBER AMOUNT
           </p>
           <p className="text-slate-700 font-mono text-sm tracking-wider font-bold">
             {service.name} • <span className="text-indigo-600">₹{service.price}</span>
           </p>
+        </div>
+
+        {/* UPI ID Address Copying section */}
+        <div className="flex items-center justify-between border border-slate-200 bg-slate-50/50 rounded-xl p-2.5 max-w-xs mx-auto mb-6 text-xs shadow-sm">
+          <div className="text-left">
+            <span className="text-[8px] font-mono text-slate-400 uppercase block font-bold leading-none mb-0.5">UPI ID ADDRESS</span>
+            <span className="font-mono text-slate-700 font-bold tracking-wider">{upiIdVal}</span>
+          </div>
+          <button
+            onClick={handleUpiCopy}
+            className="p-1.5 px-3 rounded-lg bg-white border border-slate-200 text-[10px] font-bold text-indigo-600 hover:bg-slate-50 transition cursor-pointer shadow-sm flex items-center space-x-1"
+          >
+            {upiCopied ? <span>Copied!</span> : <span>Copy ID</span>}
+          </button>
         </div>
 
         {/* 5-minute Countdown Timer */}

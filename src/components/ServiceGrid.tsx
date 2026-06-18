@@ -5,16 +5,19 @@ import { motion, AnimatePresence } from "motion/react";
 
 interface ServiceGridProps {
   onSelectService: (service: OTTSubscription) => void;
+  services?: OTTSubscription[];
 }
 
-export const ServiceGrid: React.FC<ServiceGridProps> = ({ onSelectService }) => {
+export const ServiceGrid: React.FC<ServiceGridProps> = ({ onSelectService, services }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeCategory, setActiveCategory] = useState<"all" | "entertainment" | "music" | "productivity">("all");
   
   // Local state to track which card is currently performing the pop-up logo transition
   const [animatingService, setAnimatingService] = useState<OTTSubscription | null>(null);
 
-  const filteredServices = OTT_SUBSCRIBERS.filter((service) => {
+  const catalog = services && services.length > 0 ? services : OTT_SUBSCRIBERS;
+
+  const filteredServices = catalog.filter((service) => {
     const matchesSearch = service.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           service.tagline.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = activeCategory === "all" || service.category === activeCategory;
