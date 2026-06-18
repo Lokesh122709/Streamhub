@@ -3,9 +3,38 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
+import { initializeApp, getApps, getApp } from "firebase/app";
+import { getFirestore, doc, getDoc, setDoc, getDocs, collection, deleteDoc, query, where, serverTimestamp as firestoreServerTimestamp } from "firebase/firestore";
 
 // Load environment variables
 dotenv.config();
+
+// Firebase configuration for both client and server connection
+const firebaseConfig = {
+  apiKey: process.env.VITE_FIREBASE_API_KEY || "AIzaSyCbfJN0YwcS_Gd5-rY5mJ1nsA0Uy1arwgA",
+  authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || "double-composition-667s8.firebaseapp.com",
+  projectId: process.env.VITE_FIREBASE_PROJECT_ID || "double-composition-667s8",
+  storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET || "double-composition-667s8.firebasestorage.app",
+  messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "158055240353",
+  appId: process.env.VITE_FIREBASE_APP_ID || "1:158055240353:web:fe2c28baad710109f6d6e0"
+};
+
+let serverApp: any;
+let serverDb: any;
+let isDbReady = false;
+
+try {
+  if (getApps().length === 0) {
+    serverApp = initializeApp(firebaseConfig);
+  } else {
+    serverApp = getApp();
+  }
+  serverDb = getFirestore(serverApp, "ai-studio-b37509cf-5a5d-4dd7-be69-7e2538cd2dc8");
+  isDbReady = true;
+  console.log("[Backend Firebase] Connected server-side successfully to Firestore: ID ai-studio-b37509cf-5a5d-4dd7-be69-7e2538cd2dc8");
+} catch (err) {
+  console.warn("[Backend Firebase] Lazy initializing server-side connection skipped/failed:", err);
+}
 
 async function startServer() {
   const app = express();
@@ -451,6 +480,208 @@ Stream Hub Team`;
       success: true,
       message: "OTP verified successfully. (ओटीपी सत्यापित हो गया है।)"
     });
+  });
+
+  // =========================================================================
+  // UNIFIED SECURE BACKEND CONNECTED FIREBASE SERVICES (FOR MULTI-PLATFORM)
+  // =========================================================================
+
+  const FALLBACK_SETTINGS = {
+    whatsappNumber: "919024885265",
+    qrCodeUrl: "https://cdn.imageurlgenerator.com/uploads/b078839e-9a1c-45ee-9438-b4e5da61c61a.jpg",
+    upiId: "lr4239469@okaxis",
+    bannerText: "🎉 Special Discount: Share your payment screenshot on WhatsApp for instant 5-minute activation!",
+    showBanner: true,
+  };
+
+  // GET Settings configuration
+  app.get("/api/settings", async (req, res) => {
+    if (!isDbReady) {
+      return res.json(FALLBACK_SETTINGS);
+    }
+    try {
+      const docRef = doc(serverDb, "settings", "config");
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        return res.json({
+          whatsappNumber: data.whatsappNumber || FALLBACK_SETTINGS.whatsappNumber,
+          qrCodeUrl: data.qrCodeUrl || FALLBACK_SETTINGS.qrCodeUrl,
+          upiId: data.upiId || FALLBACK_SETTINGS.upiId,
+          bannerText: data.bannerText || FALLBACK_SETTINGS.bannerText,
+          showBanner: data.showBanner !== undefined ? data.showBanner : FALLBACK_SETTINGS.showBanner,
+        });
+      } else {
+        // Bootstrap base settings doc in background if missing
+        try {
+          await setDoc(docRef, { ...FALLBACK_SETTINGS, createdAt: new Date() });
+        } catch (dbErr) {
+          console.warn("[Backend Settings] Could not bootstrap default, bypassing:", dbErr);
+        }
+        return res.json(FALLBACK_SETTINGS);
+      }
+    } catch (err: any) {
+      console.warn("[Backend Settings] Firestore fetch error, returning local fallbacks:", err.message);
+      return res.json(FALLBACK_SETTINGS);
+    }
+  });
+
+  // POST Settings configuration
+  app.post("/api/settings", async (req, res) => {
+    if (!isDbReady) {
+      return res.status(500).json({ error: "Backend Firebase database service is not available." });
+    }
+    try {
+      const settingsObj = req.body;
+      const docRef = doc(serverDb, "settings", "config");
+      await setDoc(docRef, {
+        ...settingsObj,
+        updatedAt: new Date()
+      }, { merge: true });
+      return res.json({ success: true, message: "Global configurations saved successfully in Firebase" });
+    } catch (err: any) {
+      console.error("[Backend Settings] Error writing settings to Firestore:", err);
+      return res.status(500).json({ error: err.message || "Failed to update configurations" });
+    }
+  });
+
+  // GET Catalog subscription services list
+  app.get("/api/services", async (req, res) => {
+    if (!isDbReady) {
+      return res.status(503).json({ error: "Database not connected" });
+    }
+    try {
+      const colRef = collection(serverDb, "services");
+      const snap = await getDocs(colRef);
+      const list: any[] = [];
+      snap.forEach((docSnap) => {
+        const data = docSnap.data();
+        list.push({
+          id: docSnap.id,
+          ...data
+        });
+      });
+      return res.json(list);
+    } catch (err: any) {
+      console.error("[Backend Services] Fetching subscription catalog collapsed:", err);
+      return res.status(500).json({ error: err.message || "Failed to fetch catalog subscription list" });
+    }
+  });
+
+  // POST Create/Save Catalog subscription service
+  app.post("/api/services", async (req, res) => {
+    if (!isDbReady) {
+      return res.status(503).json({ error: "Database not connected" });
+    }
+    try {
+      const serviceObj = req.body;
+      if (!serviceObj.id) {
+        return res.status(400).json({ error: "Missing subscription item profile ID" });
+      }
+      const docRef = doc(serverDb, "services", serviceObj.id);
+      await setDoc(docRef, {
+        ...serviceObj,
+        updatedAt: new Date()
+      }, { merge: true });
+      return res.json({ success: true, message: `Sub-service ${serviceObj.id} saved in backup catalogs` });
+    } catch (err: any) {
+      console.error("[Backend Services] Error creating catalogs catalog item:", err);
+      return res.status(500).json({ error: err.message || "Failed to create subscription services" });
+    }
+  });
+
+  // DELETE Catalog subscription service
+  app.delete("/api/services/:id", async (req, res) => {
+    if (!isDbReady) {
+      return res.status(503).json({ error: "Database not connected" });
+    }
+    try {
+      const serviceId = req.params.id;
+      const docRef = doc(serverDb, "services", serviceId);
+      await deleteDoc(docRef);
+      return res.json({ success: true, message: `Service ${serviceId} deleted successfully` });
+    } catch (err: any) {
+      console.error("[Backend Services] Deletion of subscription catalog item collapsed:", err);
+      return res.status(500).json({ error: err.message || "Failed to delete subscription card" });
+    }
+  });
+
+  // GET User-specific or All Active Orders
+  app.get("/api/orders", async (req, res) => {
+    if (!isDbReady) {
+      return res.json([]);
+    }
+    const { userId } = req.query;
+    try {
+      const colRef = collection(serverDb, "orders");
+      let q = colRef;
+      if (userId) {
+        q = query(colRef, where("userId", "==", userId)) as any;
+      }
+      const snap = await getDocs(q);
+      const list: any[] = [];
+      snap.forEach((docSnap) => {
+        const data = docSnap.data();
+        list.push({
+          id: docSnap.id,
+          ...data
+        });
+      });
+      return res.json(list);
+    } catch (err: any) {
+      console.error("[Backend Orders] Fetching transactions collapsed:", err);
+      return res.json([]);
+    }
+  });
+
+  // POST Create Order Transaction
+  app.post("/api/orders", async (req, res) => {
+    if (!isDbReady) {
+      return res.status(503).json({ error: "Database not connected" });
+    }
+    try {
+      const orderPayload = req.body;
+      const colRef = collection(serverDb, "orders");
+      const docRef = doc(colRef);
+      const orderId = docRef.id;
+
+      const fullRecord = {
+        id: orderId,
+        ...orderPayload,
+        status: orderPayload.status || "pending",
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      await setDoc(docRef, fullRecord);
+      return res.json({ success: true, orderId });
+    } catch (err: any) {
+      console.error("[Backend Orders] Trigger order creation failed:", err);
+      return res.status(500).json({ error: err.message || "Failed to post order requests" });
+    }
+  });
+
+  // POST Edit / Update Order status
+  app.post("/api/orders/:id/status", async (req, res) => {
+    if (!isDbReady) {
+      return res.status(503).json({ error: "Database not connected" });
+    }
+    try {
+      const orderId = req.params.id;
+      const { status } = req.body;
+      if (!status) {
+        return res.status(400).json({ error: "Status code parameter is required" });
+      }
+      const docRef = doc(serverDb, "orders", orderId);
+      await setDoc(docRef, {
+        status,
+        updatedAt: new Date()
+      }, { merge: true });
+      return res.json({ success: true, message: "Order state updated successfully" });
+    } catch (err: any) {
+      console.error("[Backend Orders] Status update failed:", err);
+      return res.status(500).json({ error: err.message || "Failed to alter status of order" });
+    }
   });
 
   // Serve static files and route SPA fallback

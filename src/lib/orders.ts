@@ -1,6 +1,3 @@
-import { collection, doc, setDoc, getDocs, query, where, serverTimestamp } from "firebase/firestore";
-import { db, handleFirestoreError, OperationType } from "./firebase";
-
 export interface Order {
   id: string;
   userId: string;
@@ -15,6 +12,9 @@ export interface Order {
 }
 
 export const ordersService = {
+  /**
+   * Registers a new order transaction in backend connected Firebase.
+   */
   async createOrder(params: {
     userId: string;
     email: string;
@@ -23,164 +23,69 @@ export const ordersService = {
     price: number;
     duration: string;
   }): Promise<string> {
-    if (!db) {
-      throw new Error("Firestore database is not initialized.");
+    const res = await fetch("/api/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Failed to create order transaction through backend.");
     }
-    const ordersCol = collection(db, "orders");
-    const newDocRef = doc(ordersCol); // Auto-generate an ID
-    const orderId = newDocRef.id;
-
-    const payload = {
-      id: orderId,
-      userId: params.userId,
-      email: params.email,
-      serviceId: params.serviceId,
-      serviceName: params.serviceName,
-      price: params.price,
-      duration: params.duration,
-      status: "pending" as const,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    };
-
-    const path = `orders/${orderId}`;
-    try {
-      await setDoc(newDocRef, payload);
-      return orderId;
-    } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, path);
-      throw error;
-    }
+    const data = await res.json();
+    return data.orderId;
   },
 
+  /**
+   * Fetches user-specific orders via backend proxy API.
+   */
   async fetchUserOrders(userId: string): Promise<Order[]> {
-    if (!db) {
-      return [];
-    }
-    const ordersCol = collection(db, "orders");
-    const q = query(
-      ordersCol,
-      where("userId", "==", userId)
-    );
-
-    const path = "orders";
     try {
-      const snap = await getDocs(q);
-      const list: Order[] = [];
-      snap.forEach((docSnap) => {
-        const data = docSnap.data();
-        let createdDate = new Date();
-        let updatedDate = new Date();
-
-        if (data.createdAt) {
-          if (typeof data.createdAt.toDate === "function") {
-            createdDate = data.createdAt.toDate();
-          } else if (data.createdAt.seconds) {
-            createdDate = new Date(data.createdAt.seconds * 1000);
-          } else {
-            createdDate = new Date(data.createdAt);
-          }
-        }
-
-        if (data.updatedAt) {
-          if (typeof data.updatedAt.toDate === "function") {
-            updatedDate = data.updatedAt.toDate();
-          } else if (data.updatedAt.seconds) {
-            updatedDate = new Date(data.updatedAt.seconds * 1000);
-          } else {
-            updatedDate = new Date(data.updatedAt);
-          }
-        }
-
-        list.push({
-          id: docSnap.id,
-          userId: data.userId || "",
-          email: data.email || "",
-          serviceId: data.serviceId || "",
-          serviceName: data.serviceName || "",
-          price: data.price || 0,
-          duration: data.duration || "",
-          status: data.status || "pending",
-          createdAt: createdDate,
-          updatedAt: updatedDate,
-        });
-      });
-      // Sort client-side to show most recent first, preventing the need for composite indexes
-      return list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, path);
-      throw error;
+      const res = await fetch(`/api/orders?userId=${encodeURIComponent(userId)}`);
+      if (!res.ok) throw new Error("Internal server returned: " + res.status);
+      const data = await res.json();
+      return (data || []).map((o: any) => ({
+        ...o,
+        createdAt: o.createdAt ? new Date(o.createdAt) : new Date(),
+        updatedAt: o.updatedAt ? new Date(o.updatedAt) : new Date(),
+      })).sort((a: Order, b: Order) => b.createdAt.getTime() - a.createdAt.getTime());
+    } catch (err) {
+      console.warn("Could not retrieve user transactions via backend API, returning empty list:", err);
+      return [];
     }
   },
   
+  /**
+   * Fetches all registered system orders. Perfect for separate/external Admin controllers.
+   */
   async fetchAllOrders(): Promise<Order[]> {
-    if (!db) {
-      return [];
-    }
-    const ordersCol = collection(db, "orders");
-    const path = "orders";
     try {
-      const snap = await getDocs(ordersCol);
-      const list: Order[] = [];
-      snap.forEach((docSnap) => {
-        const data = docSnap.data();
-        let createdDate = new Date();
-        let updatedDate = new Date();
-
-        if (data.createdAt) {
-          if (typeof data.createdAt.toDate === "function") {
-            createdDate = data.createdAt.toDate();
-          } else if (data.createdAt.seconds) {
-            createdDate = new Date(data.createdAt.seconds * 1000);
-          } else {
-            createdDate = new Date(data.createdAt);
-          }
-        }
-
-        if (data.updatedAt) {
-          if (typeof data.updatedAt.toDate === "function") {
-            updatedDate = data.updatedAt.toDate();
-          } else if (data.updatedAt.seconds) {
-            updatedDate = new Date(data.updatedAt.seconds * 1000);
-          } else {
-            updatedDate = new Date(data.updatedAt);
-          }
-        }
-
-        list.push({
-          id: docSnap.id,
-          userId: data.userId || "",
-          email: data.email || "",
-          serviceId: data.serviceId || "",
-          serviceName: data.serviceName || "",
-          price: data.price || 0,
-          duration: data.duration || "",
-          status: data.status || "pending",
-          createdAt: createdDate,
-          updatedAt: updatedDate,
-        });
-      });
-      return list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, path);
-      throw error;
+      const res = await fetch("/api/orders");
+      if (!res.ok) throw new Error("Internal server returned: " + res.status);
+      const data = await res.json();
+      return (data || []).map((o: any) => ({
+        ...o,
+        createdAt: o.createdAt ? new Date(o.createdAt) : new Date(),
+        updatedAt: o.updatedAt ? new Date(o.updatedAt) : new Date(),
+      })).sort((a: Order, b: Order) => b.createdAt.getTime() - a.createdAt.getTime());
+    } catch (err) {
+      console.warn("Could not retrieve system transactions via backend API, returning empty list:", err);
+      return [];
     }
   },
 
+  /**
+   * Safe status update request.
+   */
   async updateOrderStatus(orderId: string, status: 'pending' | 'active' | 'expired'): Promise<void> {
-    if (!db) {
-      throw new Error("Firestore database is not initialized.");
-    }
-    const orderDocRef = doc(db, "orders", orderId);
-    const path = `orders/${orderId}`;
-    try {
-      await setDoc(orderDocRef, {
-        status,
-        updatedAt: serverTimestamp()
-      }, { merge: true });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, path);
-      throw error;
+    const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}/status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status })
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Failed to alter status of order on backend.");
     }
   }
 };

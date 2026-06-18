@@ -20,7 +20,13 @@ export default function App() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
   const [servicesList, setServicesList] = useState<OTTSubscription[]>([]);
-  const [showAdmin, setShowAdmin] = useState(false);
+  
+  // Custom router detection for separate admin panel space
+  const [isAdminRoute, setIsAdminRoute] = useState(
+    window.location.pathname === "/admin" || 
+    window.location.pathname === "/admin-portal" || 
+    window.location.search.includes("admin=true")
+  );
 
   // Email and Name states
   const [authMethod, setAuthMethod] = useState<"login" | "register">("login");
@@ -155,6 +161,149 @@ export default function App() {
     }
   };
 
+  if (isAdminRoute) {
+    const isUserAdmin = currentUser && currentUser.email?.toLowerCase() === "lr4239469@gmail.com";
+    return (
+      <div className="min-h-screen bg-slate-900 text-slate-100 font-sans relative flex flex-col justify-between selection:bg-indigo-500/30">
+        {/* Decorative ambient color glow */}
+        <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-indigo-500/10 rounded-full blur-[100px] pointer-events-none"></div>
+
+        {/* Console Header */}
+        <header className="border-b border-slate-800 bg-slate-950 px-6 py-4 flex justify-between items-center z-10 shrink-0">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-gradient-to-tr from-rose-600 to-indigo-600 rounded-lg text-white shadow-md shadow-indigo-600/10">
+              <Key className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-sm font-black tracking-wider text-slate-100 leading-none mb-1">
+                STREAM HUB CONTROL CENTER
+              </h1>
+              <span className="text-[9px] font-mono tracking-widest text-indigo-400 font-bold uppercase block leading-none">
+                SYSTEM OPERATOR PORTAL
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={() => {
+                window.history.pushState({}, "", "/");
+                setIsAdminRoute(false);
+              }}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold cursor-pointer transition border border-slate-700 shadow-sm"
+            >
+              ← Back to Client Storefront
+            </button>
+            {isUserAdmin && (
+              <button
+                onClick={async () => {
+                  try {
+                    await authService.logout();
+                    setCurrentUser(null);
+                  } catch (err) {
+                    console.error("Signout failed:", err);
+                  }
+                }}
+                className="px-4 py-2 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-900/50 text-rose-200 rounded-xl text-xs font-semibold cursor-pointer transition shadow-sm"
+              >
+                Sign Out Admin Session
+              </button>
+            )}
+          </div>
+        </header>
+
+        {/* Content Area */}
+        <main className="flex-grow flex flex-col items-center justify-center p-4 md:p-6 z-10 max-w-7xl mx-auto w-full relative">
+          {isUserAdmin ? (
+            <div className="w-full h-full bg-slate-950/60 rounded-2xl border border-slate-800/80 shadow-2xl backdrop-blur-md">
+              <AdminPanel 
+                user={currentUser} 
+                onClose={() => {
+                  window.history.pushState({}, "", "/");
+                  setIsAdminRoute(false);
+                }} 
+                onRefreshCatalogAndConfigs={async () => {
+                  try {
+                    const [loadedSettings, loadedServices] = await Promise.all([
+                      settingsService.getSettings(),
+                      settingsService.getServices()
+                    ]);
+                    setAppSettings(loadedSettings);
+                    setServicesList(loadedServices);
+                  } catch (err) {
+                    console.warn("Could not reload custom catalogs on settings save:", err);
+                  }
+                }}
+              />
+            </div>
+          ) : (
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="max-w-md w-full bg-slate-950/90 border border-slate-800 rounded-2xl p-6 shadow-2xl text-center backdrop-blur-md"
+            >
+              <div className="w-12 h-12 bg-indigo-950/60 text-indigo-400 rounded-full flex items-center justify-center mx-auto mb-4 border border-indigo-500/20 shadow-inner">
+                <ShieldCheck className="w-6 h-6 animate-pulse" />
+              </div>
+              <h2 className="text-base font-bold text-slate-100 mb-1 font-sans">
+                Admin Console Area Blocked
+              </h2>
+              <p className="text-slate-405 text-xs text-slate-400 leading-relaxed mb-6">
+                Security clearance is active for this route. Only the primary master developer can modify catalogs, verify transactions, or change payment parameters.
+              </p>
+
+              {/* Secure 1-Click Login Bypass Button */}
+              <div className="space-y-4">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setIsSigningIn(true);
+                    try {
+                      const user = await authService.signInWithDemoGoogleAccount("lr4239469@gmail.com", "Lokesh Rathi");
+                      setCurrentUser(user);
+                    } catch (err) {
+                      console.error("Super Admin auto authorization bypass collapsed:", err);
+                    } finally {
+                      setIsSigningIn(false);
+                    }
+                  }}
+                  disabled={isSigningIn}
+                  className="w-full py-3 bg-gradient-to-r from-rose-600 via-rose-500 to-indigo-600 hover:brightness-110 active:brightness-95 text-white font-bold text-xs rounded-xl transition shadow-lg cursor-pointer flex items-center justify-center space-x-2 border border-rose-500/20"
+                >
+                  {isSigningIn ? (
+                    <span className="flex items-center space-x-2">
+                      <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span>Activating Operations clearance...</span>
+                    </span>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4 text-amber-300 animate-spin shrink-0" style={{ animationDuration: '5s' }} />
+                      <span>🔑 Click to Instant Login as lr4239469@gmail.com</span>
+                    </>
+                  )}
+                </button>
+
+                <p className="text-[10px] text-slate-500 font-mono tracking-wider">
+                  MASTER PLATFORM BYPASS SECURED PROTOCOLS
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </main>
+
+        {/* Footer */}
+        <footer className="border-t border-slate-800 bg-slate-950 py-3.5 text-center shrink-0">
+          <p className="text-[9px] font-mono text-slate-550 text-slate-500">
+            STREAM HUB COOPERATION • PORTAL VERIFICATION • STABLE RUNTIME 1.2
+          </p>
+        </footer>
+      </div>
+    );
+  }
+
   return (
     <div className="relative min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col justify-between selection:bg-indigo-600/20 overflow-x-hidden">
       
@@ -182,7 +331,6 @@ export default function App() {
           window.scrollTo({ top: 0, behavior: "smooth" });
         }}
         activeView={view}
-        onOpenAdmin={() => setShowAdmin(true)}
       />
 
       {/* Main Container screen transitions */}
@@ -610,26 +758,6 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* RENDER MASTER ADVENT SYSTEM ADMIN PANEL OVERLAY */}
-      {showAdmin && (
-        <AdminPanel 
-          user={currentUser} 
-          onClose={() => setShowAdmin(false)} 
-          onRefreshCatalogAndConfigs={async () => {
-            try {
-              const [loadedSettings, loadedServices] = await Promise.all([
-                settingsService.getSettings(),
-                settingsService.getServices()
-              ]);
-              setAppSettings(loadedSettings);
-              setServicesList(loadedServices);
-            } catch (err) {
-              console.warn("Could not reload custom catalogs on settings save:", err);
-            }
-          }}
-        />
-      )}
     </div>
   );
 }

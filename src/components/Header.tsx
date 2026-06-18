@@ -7,10 +7,9 @@ interface HeaderProps {
   onOpenAuth?: () => void;
   onNavigate?: (view: "grid" | "orders") => void;
   activeView?: string;
-  onOpenAdmin?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onUserChange, onOpenAuth, onNavigate, activeView, onOpenAdmin }) => {
+export const Header: React.FC<HeaderProps> = ({ onUserChange, onOpenAuth, onNavigate, activeView }) => {
   const [user, setUser] = useState<GoogleUser | null>(authService.getCurrentUser());
   const [showDropdown, setShowDropdown] = useState(false);
 
@@ -116,22 +115,6 @@ export const Header: React.FC<HeaderProps> = ({ onUserChange, onOpenAuth, onNavi
                       <ShoppingBag className="w-4 h-4 text-indigo-500 shrink-0" />
                       <span>My Past Orders</span>
                     </button>
-
-                    {/* NEW: MASTER ADMIN PORTAL LINK (Securely restricted to lr4239469@gmail.com) */}
-                    {user?.email?.toLowerCase() === "lr4239469@gmail.com" && (
-                      <button
-                        onClick={() => {
-                          if (onOpenAdmin) onOpenAdmin();
-                          setShowDropdown(false);
-                        }}
-                        className="w-full flex items-center space-x-2.5 p-2 rounded-xl text-xs font-bold text-slate-800 bg-amber-50 hover:bg-amber-100 border border-amber-250 transition cursor-pointer mb-2.5"
-                      >
-                        <Settings className="w-4 h-4 text-amber-500 shrink-0 animate-spin" style={{ animationDuration: '6s' }} />
-                        <span>Admin Control Panel</span>
-                      </button>
-                    )}
-
-
 
                     <button
                       id="logout-btn"

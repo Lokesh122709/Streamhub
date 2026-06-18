@@ -1,5 +1,3 @@
-import { doc, getDoc, getDocs, collection, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
-import { db, handleFirestoreError, OperationType } from "./firebase";
 import { OTTSubscription, OTT_SUBSCRIBERS } from "../data/ottData";
 
 export interface AppSettings {
@@ -21,144 +19,95 @@ const DEFAULT_SETTINGS: AppSettings = {
 
 export const settingsService = {
   /**
-   * Fetches site-wide settings from settings/config block. Fallback to hardcoded defaults on error or empty.
+   * Fetches site-wide settings from secure Express backend. Fallback to hardcoded defaults on error or empty.
    */
   async getSettings(): Promise<AppSettings> {
-    if (!db) {
-      return DEFAULT_SETTINGS;
-    }
     try {
-      const docRef = doc(db, "settings", "config");
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        return {
-          whatsappNumber: data.whatsappNumber || DEFAULT_SETTINGS.whatsappNumber,
-          qrCodeUrl: data.qrCodeUrl || DEFAULT_SETTINGS.qrCodeUrl,
-          upiId: data.upiId || DEFAULT_SETTINGS.upiId,
-          bannerText: data.bannerText || DEFAULT_SETTINGS.bannerText,
-          showBanner: data.showBanner !== undefined ? data.showBanner : DEFAULT_SETTINGS.showBanner,
-        };
-      } else {
-        // Automatically bootstrap settings on first launch so the admin panel has a record to update!
-        try {
-          await setDoc(docRef, {
-            ...DEFAULT_SETTINGS,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-        } catch (setErr) {
-          console.warn("Could not auto-bootstrap default settings (non-critical):", setErr);
-        }
-        return DEFAULT_SETTINGS;
-      }
+      const res = await fetch("/api/settings");
+      if (!res.ok) throw new Error("Backend answered with status: " + res.status);
+      const data = await res.json();
+      return {
+        whatsappNumber: data.whatsappNumber || DEFAULT_SETTINGS.whatsappNumber,
+        qrCodeUrl: data.qrCodeUrl || DEFAULT_SETTINGS.qrCodeUrl,
+        upiId: data.upiId || DEFAULT_SETTINGS.upiId,
+        bannerText: data.bannerText || DEFAULT_SETTINGS.bannerText,
+        showBanner: data.showBanner !== undefined ? data.showBanner : DEFAULT_SETTINGS.showBanner,
+      };
     } catch (err) {
-      console.warn("Failed to fetch settings, using local hardcoded fallbacks:", err);
+      console.warn("Failed to fetch settings through backend API proxies, using local defaults:", err);
       return DEFAULT_SETTINGS;
     }
   },
 
   /**
-   * Fetches all registered subscription services from Firebase Firestore.
-   * Merges or falls back to standard catalog (OTT_SUBSCRIBERS) if Firestore is empty/unconfigured.
+   * Fetches all registered subscription services from secure Express backend.
+   * Merges or falls back to standard catalog if empty.
    */
   async getServices(): Promise<OTTSubscription[]> {
-    if (!db) {
-      return OTT_SUBSCRIBERS;
-    }
     try {
-      const colRef = collection(db, "services");
-      const querySnap = await getDocs(colRef);
-      if (querySnap.empty) {
-        // Optional: Auto-populate the catalog in Firestore so the admin panel instantly sees them
-        console.log("No services collection found. Bootstrapping initial OTT catalog from local memory...");
+      const res = await fetch("/api/services");
+      if (!res.ok) throw new Error("Backend answered with status: " + res.status);
+      const list = await res.json();
+      
+      if (!list || list.length === 0) {
+        console.log("No services returned by backend, bootstrapping local OTT catalog...");
+        // Bootstrap services via API calls so future backend gets populated
         for (const plan of OTT_SUBSCRIBERS) {
           try {
-            await setDoc(doc(db, "services", plan.id), {
-              ...plan,
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-            });
-          } catch (writeErr) {
-            console.warn(`Bootstrapping premium plan ${plan.id} failed:`, writeErr);
+            await this.saveService(plan);
+          } catch (pErr) {
+            console.warn("Failed backfilled auto sync:", pErr);
           }
         }
         return OTT_SUBSCRIBERS;
       }
-
-      const list: OTTSubscription[] = [];
-      querySnap.forEach((docSnap) => {
-        const data = docSnap.data();
-        list.push({
-          id: docSnap.id,
-          name: data.name || "",
-          price: Number(data.price) || 0,
-          duration: data.duration || "",
-          logoKey: data.logoKey || "youtube",
-          benefits: Array.isArray(data.benefits) ? data.benefits : [],
-          description: data.description || "",
-          category: data.category || "entertainment",
-          tagline: data.tagline || "",
-        });
-      });
       return list;
     } catch (err) {
-      console.warn("Failed to retrieve custom services, falling back to local list:", err);
+      console.warn("Failed to retrieve custom services via backend proxies, falling back to local list:", err);
       return OTT_SUBSCRIBERS;
     }
   },
 
   /**
-   * Updates global platform configuration like WhatsApp line, Official UPI ID, and status notices.
+   * Updates global platform configuration.
    */
   async updateSettings(settings: AppSettings): Promise<void> {
-    if (!db) {
-      throw new Error("Firestore is not initialized.");
-    }
-    try {
-      const docRef = doc(db, "settings", "config");
-      await setDoc(docRef, {
-        ...settings,
-        updatedAt: serverTimestamp()
-      }, { merge: true });
-    } catch (err) {
-      console.error("Failed to update site configuration settings:", err);
-      throw err;
+    const res = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(settings),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Failed to update global configurations on backend.");
     }
   },
 
   /**
-   * Overwrites or creates a premium subscription service record inside "services" collection.
+   * Overwrites or creates a premium subscription service record.
    */
   async saveService(service: OTTSubscription): Promise<void> {
-    if (!db) {
-      throw new Error("Firestore is not initialized.");
-    }
-    try {
-      const docRef = doc(db, "services", service.id);
-      await setDoc(docRef, {
-        ...service,
-        updatedAt: serverTimestamp()
-      }, { merge: true });
-    } catch (err) {
-      console.error(`Failed to save service document ${service.id}:`, err);
-      throw err;
+    const res = await fetch("/api/services", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(service),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Failed to update dynamic service catalog on backend.");
     }
   },
 
   /**
-   * Uninstalls a dynamic premium service plan immediately.
+   * Uninstalls a dynamic premium service plan.
    */
   async deleteService(serviceId: string): Promise<void> {
-    if (!db) {
-      throw new Error("Firestore is not initialized.");
-    }
-    try {
-      const docRef = doc(db, "services", serviceId);
-      await deleteDoc(docRef);
-    } catch (err) {
-      console.error(`Failed to delete service document ${serviceId}:`, err);
-      throw err;
+    const res = await fetch(`/api/services/${encodeURIComponent(serviceId)}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Failed to delete service catalog from backend");
     }
   }
 };
